@@ -7,6 +7,8 @@ Didn't commit this to main repo because I don't think they'd accept a plugin usi
 
 Please open an issue for any bugs
 
+### Please leave a star :)
+
 Follow me on twitter: [@Lunascaped](https://twitter.com/Lunascaped)
 
 Please go to [gaq9.com](https://gaq9.com)
