@@ -9,7 +9,7 @@ Please open an issue for any bugs
 
 ## For Installation
 
-Please follow the [offical instructions](https://docs.vencord.dev/installing/custom-plugins/) from Vencord on installing custom plugins
+Please follow the [official instructions](https://docs.vencord.dev/installing/custom-plugins/) from Vencord on installing custom plugins
 
 ### Please leave a star :)
 
