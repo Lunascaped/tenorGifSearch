@@ -7,6 +7,10 @@ Didn't commit this to main repo because I don't think they'd accept a plugin usi
 
 Please open an issue for any bugs
 
+## For Installation
+
+Please follow the [offical instructions](https://docs.vencord.dev/installing/custom-plugins/) from Vencord on installing custom plugins
+
 ### Please leave a star :)
 
 Follow me on twitter: [@Lunascaped](https://twitter.com/Lunascaped)
