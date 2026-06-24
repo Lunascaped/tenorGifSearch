@@ -7,6 +7,8 @@ Didn't commit this to main repo because I don't think they'd accept a plugin usi
 
 Please open an issue for any bugs
 
+If you want a similar plugin for Twitter, [I have created one here](https://github.com/Lunascaped/reTenor).
+
 ## For Installation
 
 Please follow the [official instructions](https://docs.vencord.dev/installing/custom-plugins/) from Vencord on installing custom plugins
