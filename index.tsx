@@ -4,17 +4,14 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { Margins } from "@components/margins";
-import { Paragraph } from "@components/Paragraph";
 import definePlugin from "@utils/types";
 import { FluxDispatcher, LocaleStore } from "@webpack/common";
 
+// API key is taken from the GBoard app on iOS
 const TENOR_KEY = "3Z0688EVWYKH";
 const RESULT_LIMIT = 100;
 const SEARCH_DEBOUNCE_MS = 250;
 
-let activeAbort: AbortController | null = null;
-let categoryAbort: AbortController | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let cachedCategories: TrendingCategories | null = null;
 
@@ -41,16 +38,15 @@ interface TrendingCategories {
 interface GifPickerInstance {
     state: { resultType: string | null; };
     setState(state: { resultType: string | null; }, callback?: () => void): void;
-    props: { searchBarRef?: { current?: { focus(): void; } | null; }; };
+    props: { searchBarRef?: RefObject<HTMLInputElement>; };
 }
 
 function tenorUrl(path: string, extra: Record<string, string> = {}) {
-    const url = new URL(`https://api.tenor.com/v1/${path}`);
-    url.searchParams.set("key", TENOR_KEY);
-    url.searchParams.set("locale", (LocaleStore.locale).replace("-", "_").toLowerCase());
-    for (const [k, v] of Object.entries(extra))
-        url.searchParams.set(k, v);
-    return url.toString();
+    return `https://api.tenor.com/v1/${path}?` + new URLSearchParams({
+        key: TENOR_KEY,
+        locale: LocaleStore.locale.replace("-", "_").toLowerCase(),
+        ...extra
+    });
 }
 
 function toDiscordGif(item: TenorResult): DiscordGif | null {
@@ -73,24 +69,24 @@ function mapGifs(items: TenorResult[]) {
     return items.map(toDiscordGif).filter((g): g is DiscordGif => g != null);
 }
 
-async function fetchSearch(query: string, signal: AbortSignal) {
-    const res = await fetch(tenorUrl("search", { q: query, limit: String(RESULT_LIMIT) }), { signal });
+async function fetchSearch(query: string) {
+    const res = await fetch(tenorUrl("search", { q: query, limit: String(RESULT_LIMIT) }));
     if (!res.ok) return [];
     const body = await res.json();
     const items: TenorResult[] = Array.isArray(body) ? body : (body.results ?? body.items ?? []);
     return mapGifs(items);
 }
 
-async function fetchTrending(signal: AbortSignal) {
-    const res = await fetch(tenorUrl("trending", { limit: String(RESULT_LIMIT) }), { signal });
+async function fetchTrending() {
+    const res = await fetch(tenorUrl("trending", { limit: String(RESULT_LIMIT) }));
     if (!res.ok) return [];
     const body = await res.json();
     return mapGifs(body.results ?? []);
 }
 
-async function fetchCategories(signal: AbortSignal): Promise<TrendingCategories | null> {
+async function fetchCategories(): Promise<TrendingCategories | null> {
     try {
-        const res = await fetch(tenorUrl("categories", { type: "featured" }), { signal });
+        const res = await fetch(tenorUrl("categories", { type: "featured" }));
         if (!res.ok) return null;
         const { tags } = await res.json() as { tags?: TenorCategoryTag[]; };
         if (!tags?.length) return null;
@@ -104,18 +100,12 @@ async function fetchCategories(signal: AbortSignal): Promise<TrendingCategories 
 }
 
 function doFetch(query: string) {
-    activeAbort?.abort();
-    const abort = new AbortController();
-    activeAbort = abort;
-
-    fetchSearch(query, abort.signal).then(items => {
-        if (abort.signal.aborted) return;
+    fetchSearch(query).then(items => {
         FluxDispatcher.dispatch(items.length
             ? { type: "GIF_PICKER_QUERY_SUCCESS", query, items }
             : { type: "GIF_PICKER_QUERY_FAILURE", query }
         );
-    }).catch(err => {
-        if (err.name === "AbortError") return;
+    }).catch(() => {
         FluxDispatcher.dispatch({ type: "GIF_PICKER_QUERY_FAILURE", query });
     });
 }
@@ -124,31 +114,23 @@ export default definePlugin({
     name: "TenorGifSearch",
     description: "Restore Tenor GIF search",
     authors: [{ name: "Lunascape", id: 383365021415243776n }],
-    settingsAboutComponent: () => (
-        <Paragraph className={Margins.bottom16}>
-            This plugin restores Tenor GIF searching after Tenor killed the public API, this uses the Mobile API from GBoard.
-        </Paragraph>
-    ),
     patches: [
         {
             find: "renderHeaderContent()",
             replacement: [
                 {
-                    match: /(search\((\i),\s*(\i),\s*(\i)\)\s*\{)/,
+                    match: /(search\((\i),(\i),(\i)\)\{)/,
                     replace: "$1if($self.handleSearch(this,$2,$3,$4))return;"
                 },
                 {
-                    match: /(handleSelectItem\s*=\s*\((\i),\s*(\i)\)\s*=>\s*\{)/,
+                    match: /(handleSelectItem=\((\i),(\i)\)=>\{)/,
                     replace: "$1if($self.handleSelectItem(this,$2,$3))return;"
+                },
+                {
+                    match: /placeholder:(\i),"aria-label":\i/,
+                    replace: 'placeholder:$1.replace(/Giphy|Klipy/gi,"Tenor"),"aria-label":$1.replace(/Giphy|Klipy/gi,"Tenor")'
                 }
             ]
-        },
-        {
-            find: "gif_picker",
-            replacement: {
-                match: /\i\.getConfig\(\{location:"gif_picker"\}\)\.provider/,
-                replace: '"tenor"'
-            }
         },
         {
             find: '"GIF_PICKER_TRENDING_FETCH_SUCCESS",trendingCategories:',
@@ -160,24 +142,10 @@ export default definePlugin({
     ],
 
     start() {
-        const abort = new AbortController();
-        categoryAbort = abort;
-        fetchCategories(abort.signal).then(data => {
-            if (!data || abort.signal.aborted) return;
+        fetchCategories().then(data => {
+            if (!data) return;
             cachedCategories = data;
         });
-    },
-
-    stop() {
-        cachedCategories = null;
-        activeAbort?.abort();
-        activeAbort = null;
-        categoryAbort?.abort();
-        categoryAbort = null;
-        if (debounceTimer) {
-            clearTimeout(debounceTimer);
-            debounceTimer = null;
-        }
     },
 
     handleTrendingFetch() {
@@ -185,11 +153,8 @@ export default definePlugin({
             FluxDispatcher.dispatch({ type: "GIF_PICKER_TRENDING_FETCH_SUCCESS", ...cachedCategories });
             return;
         }
-        categoryAbort?.abort();
-        const abort = new AbortController();
-        categoryAbort = abort;
-        fetchCategories(abort.signal).then(data => {
-            if (!data || abort.signal.aborted) return;
+        fetchCategories().then(data => {
+            if (!data) return;
             cachedCategories = data;
             FluxDispatcher.dispatch({ type: "GIF_PICKER_TRENDING_FETCH_SUCCESS", ...data });
         });
@@ -202,8 +167,6 @@ export default definePlugin({
         }
 
         if (query === "") {
-            activeAbort?.abort();
-            activeAbort = null;
             return false;
         }
 
@@ -233,17 +196,12 @@ export default definePlugin({
         }
         if (type === "Trending") {
             instance.setState({ resultType: type });
-            activeAbort?.abort();
-            const abort = new AbortController();
-            activeAbort = abort;
-            fetchTrending(abort.signal).then(items => {
-                if (abort.signal.aborted) return;
+            fetchTrending().then(items => {
                 FluxDispatcher.dispatch(items.length
                     ? { type: "GIF_PICKER_QUERY_SUCCESS", items }
                     : { type: "GIF_PICKER_QUERY_FAILURE" }
                 );
-            }).catch(err => {
-                if (err.name === "AbortError") return;
+            }).catch(() => {
                 FluxDispatcher.dispatch({ type: "GIF_PICKER_QUERY_FAILURE" });
             });
             return true;
