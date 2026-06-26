@@ -6,7 +6,6 @@
 
 import { Margins } from "@components/margins";
 import { Paragraph } from "@components/Paragraph";
-import { Devs } from "@utils/constants";
 import definePlugin from "@utils/types";
 import { FluxDispatcher, LocaleStore } from "@webpack/common";
 
