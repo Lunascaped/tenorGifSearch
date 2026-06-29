@@ -9,6 +9,7 @@ import definePlugin from "@utils/types";
 import { FluxDispatcher, LocaleStore } from "@webpack/common";
 
 // API key is taken from the GBoard app on iOS
+// API key is taken from the GBoard app on iOS
 const TENOR_KEY = "3Z0688EVWYKH";
 
 let cachedCategories: TrendingCategories | null = null;
@@ -34,6 +35,11 @@ interface TrendingCategories {
 }
 
 function tenorUrl(path: string, extra: Record<string, string> = {}) {
+    return `https://api.tenor.com/v1/${path}?` + new URLSearchParams({
+        key: TENOR_KEY,
+        locale: LocaleStore.locale.replace("-", "_").toLowerCase(),
+        ...extra
+    });
     return `https://api.tenor.com/v1/${path}?` + new URLSearchParams({
         key: TENOR_KEY,
         locale: LocaleStore.locale.replace("-", "_").toLowerCase(),
@@ -125,6 +131,8 @@ export default definePlugin({
     start() {
         fetchCategories().then(data => {
             if (!data) return;
+        fetchCategories().then(data => {
+            if (!data) return;
             cachedCategories = data;
         });
     },
@@ -157,6 +165,8 @@ export default definePlugin({
             FluxDispatcher.dispatch({ type: "GIF_PICKER_TRENDING_FETCH_SUCCESS", ...cachedCategories });
             return;
         }
+        fetchCategories().then(data => {
+            if (!data) return;
         fetchCategories().then(data => {
             if (!data) return;
             cachedCategories = data;
